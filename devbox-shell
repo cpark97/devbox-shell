@@ -9,14 +9,19 @@ Usage: devbox-shell [-c "<command to run in devbox>"] <pkg1> [pkg2 ...]
 - Accepts one or more package names.
 - Option -c specifies a command to run inside the devbox environment.
 - Without -c, an interactive devbox shell will be opened.
+ - Option -t <dir> sets the parent directory where the temporary project will be created.
 EOF
 }
 
 USER_CMD=""
-while getopts ":c:h" opt; do
+TMP_BASE=""
+while getopts ":c:t:h" opt; do
 	case "$opt" in
 		c)
 			USER_CMD="$OPTARG"
+			;;
+		t)
+			TMP_BASE="$OPTARG"
 			;;
 		h)
 			usage
@@ -52,8 +57,18 @@ fi
 devbox version
 
 # Create a temporary directory for the devbox project
-# macOS-friendly mktemp usage
-TMP_DIR="$(mktemp -d -t devbox-shell-XXXXXX)"
+# macOS-friendly mktemp usage. If a parent directory is provided, create under it.
+if [ -n "$TMP_BASE" ]; then
+	# Ensure directory exists and is writable
+	mkdir -p "$TMP_BASE"
+	if [ ! -d "$TMP_BASE" ] || [ ! -w "$TMP_BASE" ]; then
+		echo "Error: Provided directory for -t is not writable: $TMP_BASE" >&2
+		exit 3
+	fi
+	TMP_DIR="$(mktemp -d -p "$TMP_BASE" -t devbox-shell)"
+else
+	TMP_DIR="$(mktemp -d -t devbox-shell)"
+fi
 cleanup() {
 	# Best-effort cleanup
 	if [ -n "${TMP_DIR:-}" ] && [ -d "$TMP_DIR" ]; then
