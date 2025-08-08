@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+usage() {
+	cat <<'EOF'
+Usage: devbox-shell [-c "<command to run in devbox>"] <pkg1> [pkg2 ...]
+
+- Accepts one or more package names.
+- Option -c specifies a command to run inside the devbox environment.
+- Without -c, an interactive devbox shell will be opened.
+EOF
+}
+
+USER_CMD=""
+while getopts ":c:h" opt; do
+	case "$opt" in
+		c)
+			USER_CMD="$OPTARG"
+			;;
+		h)
+			usage
+			exit 0
+			;;
+		:)
+			echo "Error: Option -$OPTARG requires an argument." >&2
+			usage
+			exit 2
+			;;
+		*)
+			echo "Error: Invalid option -$OPTARG" >&2
+			usage
+			exit 2
+			;;
+	esac
+done
+shift $((OPTIND - 1))
+
+if [ "$#" -lt 1 ]; then
+	echo "Error: At least one package name is required." >&2
+	usage
+	exit 2
+fi
+
+ORIG_DIR="$(pwd)"
+
+# Check devbox installation and print version
+if ! command -v devbox >/dev/null 2>&1; then
+	echo "Error: devbox is not installed or not in PATH." >&2
+	exit 127
+fi
+devbox version
+
+# Create a temporary directory for the devbox project
+# macOS-friendly mktemp usage
+TMP_DIR="$(mktemp -d -t devbox-shell-XXXXXX)"
+cleanup() {
+	# Best-effort cleanup
+	if [ -n "${TMP_DIR:-}" ] && [ -d "$TMP_DIR" ]; then
+		rm -rf "$TMP_DIR" || true
+	fi
+}
+trap cleanup EXIT INT TERM
+
+echo "Using temporary project directory: $TMP_DIR" >&2
+
+# Initialize devbox project
+( cd "$TMP_DIR" && devbox init >/dev/null )
+
+# Add all requested packages
+for pkg in "$@"; do
+	echo "Adding package: $pkg" >&2
+	( cd "$TMP_DIR" && devbox add "$pkg" )
+done
+
+# Run either an interactive shell or a provided command from the original directory
+cd "$ORIG_DIR"
+
+if [ -z "$USER_CMD" ]; then
+	# Interactive shell using the temporary project config
+	devbox shell -c "$TMP_DIR"
+	status=$?
+else
+	# Run the given command within the devbox environment using the temporary project config
+	devbox run -c "$TMP_DIR" $USER_CMD
+	status=$?
+fi
+
+exit "$status"
+
