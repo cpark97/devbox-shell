@@ -65,9 +65,9 @@ if [ -n "$TMP_BASE" ]; then
 		echo "Error: Provided directory for -t is not writable: $TMP_BASE" >&2
 		exit 3
 	fi
-	TMP_DIR="$(mktemp -d -p "$TMP_BASE" -t devbox-shell)"
+	TMP_DIR="$(mktemp -d -p "$TMP_BASE" -t "devbox-shell.XXXXXX")"
 else
-	TMP_DIR="$(mktemp -d -t devbox-shell)"
+	TMP_DIR="$(mktemp -d -t "devbox-shell.XXXXXX")"
 fi
 cleanup() {
 	# Best-effort cleanup
